@@ -26,10 +26,10 @@ def loadQuad(animal, date):
         subject = 'S2'
 
 
-    basedir = '/home/danhan/code/data/quad_data'
+    basedir = '/home/danhan/code/fob_theo'
     paths = {
     'ml2_dir': f'{basedir}/{animal}/behavior/{date}',
-    'conditions_dir': f'{basedir}/{animal}/conditions_quadrilaterals_{subject}.txt', 
+    'conditions_dir': f'{basedir}/{animal}/{date}_{animal}_conditions_groups.txt', 
     'tdt_dir': f'{basedir}/{animal}/tdt/{date}',
     'spikes_dir': f'{basedir}/{animal}/spikes_postprocess/{date}/DATSTRUCT_CLEAN_MERGED.mat'
     }
@@ -128,19 +128,19 @@ class Quads:
         self._session_rec_names = None
         self.ml2_dat_list = self.loadML2Data()              # dict with all trial info (convert bhv2 to mat)
         self.conditions = self.loadCondtionsFile() # conditions file loaded from text as pd df
-        self.tdt_dat_list = self.loadTdtData()
-        self._session_durations = self.getSessionDurations()
+        # self.tdt_dat_list = self.loadTdtData()
+        # self._session_durations = self.getSessionDurations()
         
 
         assert len(self.ml2_dat_list) > 0, 'no beh data'
-        assert len(self.tdt_dat_list) > 0, 'no tdt data'
+        # assert len(self.tdt_dat_list) > 0, 'no tdt data'
 
         #pretty data
-        self.prettyBeh = self.generatePrettyBehDF()
-        self.prettyTdt = self.generatePrettyTdtDF()
-        self.spikeTimes = self.loadSpikeTimes()
+        # self.prettyBeh = self.generatePrettyBehDF()
+        # self.prettyTdt = self.generatePrettyTdtDF()
+        # self.spikeTimes = self.loadSpikeTimes()
 
-        self.Dat = self.mergeBehTdt()
+        # self.Dat = self.mergeBehTdt()
 
     
     
