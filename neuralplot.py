@@ -4,6 +4,8 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt
 
+MAX_NUM_STIMS = 48
+
 EVENT_CODES_TO_EVENT_NAME = {
     9: 'trial_start',
     18: 'trial_end_ml2', #trial end by ml2 (after blue idle screen flashes)
@@ -12,12 +14,13 @@ EVENT_CODES_TO_EVENT_NAME = {
     21: 'sample_off',
     49: 'timeout',
     50: 'rew', 
-    51: 'trial_end_blue' #trial ends, and blue idle screen flashes
+    51: 'trial_end_blue', #trial ends, and blue idle screen flashes
+    14: 'manual_reward'
 }
 
-def loadQuad(animal, date):
+def loadNeuralplot(animal, date):
     """
-    loads quad object for given animal and date
+    loads neuralplot object for given animal and date
     NOTE: Here is where to change dir paths to match your system :)
     """
     if animal == 'Diego':
@@ -34,7 +37,7 @@ def loadQuad(animal, date):
     'spikes_dir': f'{basedir}/{animal}/spikes_postprocess/{date}/DATSTRUCT_CLEAN_MERGED.mat'
     }
 
-    return Quads(paths)
+    return Neuralplot(paths, animal, date)
 
 
 def filter_df(df: pd.DataFrame, filter_dict: dict) -> pd.DataFrame:
@@ -111,14 +114,14 @@ def group_and_average(df, group_by, average_prefix):
 #     )
 
 
-class Quads:
-    def __init__(self, paths):
+class Neuralplot:
+    def __init__(self, paths, animal, date):
         self.paths = paths
         """
         format (if not use load function):
             paths = {
             'ml2_dir': f'{basedir}/{animal}/behavior/{date}',
-            'conditions_dir': f'{basedir}/{animal}/conditions_quadrilaterals_{subject}.txt', 
+            'conditions_dir': f'{basedir}/{animal}/conditions_neuralplotrilaterals_{subject}.txt', 
             'tdt_dir': f'{basedir}/{animal}/tdt/{date}',
             'spikes_dir': f'{basedir}/{animal}/spikes_postprocess/{date}/DATSTRUCT_CLEAN_MERGED.mat'
             }
@@ -127,20 +130,22 @@ class Quads:
         #mostly internal attrs
         self._session_rec_names = None
         self.ml2_dat_list = self.loadML2Data()              # dict with all trial info (convert bhv2 to mat)
-        self.conditions = self.loadCondtionsFile() # conditions file loaded from text as pd df
-        # self.tdt_dat_list = self.loadTdtData()
-        # self._session_durations = self.getSessionDurations()
+        # self.conditions = self.loadCondtionsFile() # conditions file loaded from text as pd df
+        self.tdt_dat_list = self.loadTdtData()
+        self._session_durations = self.getSessionDurations()
+        self._animal = animal
+        self._date = date
         
 
         assert len(self.ml2_dat_list) > 0, 'no beh data'
         # assert len(self.tdt_dat_list) > 0, 'no tdt data'
 
         #pretty data
-        # self.prettyBeh = self.generatePrettyBehDF()
-        # self.prettyTdt = self.generatePrettyTdtDF()
-        # self.spikeTimes = self.loadSpikeTimes()
+        self.prettyBeh = self.generatePrettyBehDF()
+        self.prettyTdt = self.generatePrettyTdtDF()
+        self.spikeTimes = self.loadSpikeTimes()
 
-        # self.Dat = self.mergeBehTdt()
+        self.Dat = self.mergeBehTdt()
 
     
     
@@ -211,6 +216,15 @@ class Quads:
         spikes_data = mat73.loadmat(self.paths['spikes_dir'])['DATSTRUCT']
         df = pd.DataFrame.from_dict(spikes_data)
 
+        if self._animal == 'Pancho' and self._date == '260219':
+            # fix issue with some arrs being flipped from the expected channel mapping
+            #on this specific day
+            ranges = [(129,160), (161,192), (193,224), (225,256)]
+            for start, end in ranges:
+                mask = df['chan_global'].between(start, end)
+                df.loc[mask, 'chan_global'] = start + end - df.loc[mask, 'chan_global']
+
+
         return df
 
     def loadTdtNeural(self, trange, nodata = 0):
@@ -245,8 +259,8 @@ class Quads:
     
     def loadTdtNeuralDup(self, trange):
         """
-        Generally dont use, lots of data an dnot very useful except debugging
-        Function to load tdt neural data, local dup to check timing
+        Function to load tdt local dup to check timing
+        No loading or raw neural data (probs dont need)
         """
         from tdt import read_block
         tdt_list = os.listdir(self.paths['tdt_dir'])
@@ -318,7 +332,8 @@ class Quads:
             offs = session_dat.epocs.SMa1.offset
             trial_counter = 0
             for code,on,off in zip(beh_codes,ons,offs):
-                if code in range(102,132):
+                code = int(code)
+                if code in range(102,100+MAX_NUM_STIMS+2):
                     code_type = f'stim_in_cond_{int(code)%100-2}'
                     stim_index = np.nan
                 elif code == 9:
@@ -329,7 +344,7 @@ class Quads:
                     stim_counter += 1
                 else:
                     stim_index = np.nan
-                if code not in range (102,132):
+                if code not in range (102,100+MAX_NUM_STIMS+2):
                     code_type = EVENT_CODES_TO_EVENT_NAME[code]
                 new_entry = pd.DataFrame([
                     {
@@ -772,9 +787,11 @@ class Quads:
             else:
                 idx, pd_time = nearest_value(pd_times, row['on'], max_dist = max_dist)
                 if np.isnan(pd_time):
-                    assert row['code_type'] == 'fix_cue' and neural.loc[i-1,'code_type'] == 'trial_start'
+                    assert row['code_type'] == 'fix_cue' and neural.loc[i-1,'code_type'] == 'trial_start'\
+                    or row['code_type'] == 'manual_reward'
                     #sometimes first fix at trial start cue no pd time
                     #since very infrequent I assume happens when esc and then restart
+                    #also manual reward not tracked so ignore
                     pd_time = row['on']
                         
                 if idx in inds_taken:
@@ -836,6 +853,7 @@ class Quads:
         inputs:
         trial (int): monkeylogic (1 indexed) trial num
         """
+        assert False, 'probs not needed anymore unless you are mathias'
         stim_list = []
         task_objects = self.ml2_dat_list[session][f'Trial{trial_ml2}']['TaskObject']['Attribute']
         for obj in task_objects:
@@ -857,23 +875,25 @@ class Quads:
         """
 
         dat_trial = self.ml2_dat_list[session][f'Trial{trial_ml2}']
-        stim_list = self.getListStimNames(session,trial_ml2)
-        beh_codes = np.array(dat_trial['BehavioralCodes']['CodeNumbers'])
         beh_code_times = dat_trial['BehavioralCodes']['CodeTimes']
-        mask = (beh_codes >= 102) & (beh_codes <= 131)
+        beh_codes = np.array(dat_trial['BehavioralCodes']['CodeNumbers'])
+        mask = (beh_codes >= 102) & (beh_codes <= 100+MAX_NUM_STIMS+1)
         stim_code_times = beh_code_times[mask]
-        stim_codes = [c%100 for c in beh_codes if 102 <= c <= 131]
-        assert len(stim_code_times) == len(stim_codes), 'why diff?'
-        stim_success_fail = [c != stim_codes[i+1] for i,c in enumerate(stim_codes) if i < len(stim_codes)-1]
-        stim_each_present = [stim_list[c-2] for c in stim_codes]
-        if len(stim_each_present) > 0:
-            if stim_codes[-1] == 31:
-                stim_success_fail.append(True) #last fix true bc trial not end otherwise
-            else:
-                stim_success_fail.append(False) #user abort probably, rare
-        assert len(stim_success_fail) == len(stim_each_present), 'why diff lens'
 
-        #if user recorded data exists make sure they match (not all days have, feature added later in recording)
+        #old method before figured out trial record should not need unless you are mathias
+        # stim_list = self.getListStimNames(session,trial_ml2)
+        # stim_codes = [c%100 for c in beh_codes if 102 <= c <= 131]
+        # assert len(stim_code_times) == len(stim_codes), 'why diff?'
+        # stim_success_fail = [c != stim_codes[i+1] for i,c in enumerate(stim_codes) if i < len(stim_codes)-1]
+        # stim_each_present = [stim_list[c-2] for c in stim_codes]
+        # if len(stim_each_present) > 0:
+        #     if stim_codes[-1] == 31:
+        #         stim_success_fail.append(True) #last fix true bc trial not end otherwise
+        #     else:
+        #         stim_success_fail.append(False) #user abort probably, rare
+        # assert len(stim_success_fail) == len(stim_each_present), 'why diff lens'
+
+        #if user recorded data exists make sure they match (all theo days should have)
         if 'TrialData' in self.ml2_dat_list[session]['TrialRecord']['User'].keys():
                 stim_full_user = self.ml2_dat_list[session]['TrialRecord']['User']['TrialData'][trial_ml2-1]['sample_filename']
                 if isinstance(stim_full_user, str):
@@ -881,28 +901,31 @@ class Quads:
                 stim_list_user = [s.rsplit('\\')[-1].split('.')[0] for s in stim_full_user]
                 sample_error_codes_user = np.atleast_1d(self.ml2_dat_list[session]['TrialRecord']['User']['TrialData'][trial_ml2-1]['sample_error_code'])
                 stim_code_user = [c for c in sample_error_codes_user]
-                stim_list_user_drop_nofix = [stim for i,stim in enumerate(stim_list_user) if stim_code_user[i] not in [4,5]]
+                stim_list_user_drop_nofix = [stim for i,stim in enumerate(stim_list_user) if stim_code_user[i] not in [5]]
                 stim_bin_list = []
                 for code in stim_code_user:
                     if code == 0:
                         stim_bin_list.append(True)
-                    elif code == 3:
+                    elif code in [3,4]:
+                        #either broke fix during stim or in hold pd after
                         stim_bin_list.append(False)
 
                 # print(stim_list_user_drop_nofix)
                 # print(stim_each_present)
                 # print(trial_ml2)
-                assert np.all(stim_list_user_drop_nofix == stim_each_present)
-                assert len(stim_bin_list) == len(stim_success_fail)
-                if len(stim_codes) > 0:
-                    if stim_codes[-1] != 31:
-                        assert np.all(stim_bin_list[:-1] == stim_success_fail[:-1]) #no way to tell with other method if manual abort whether success or fail
-                        stim_success_fail = stim_bin_list #defer to user data for more accuarte reading
-                    else:
-                        assert np.all(stim_bin_list == stim_success_fail)
+                # assert np.all(stim_list_user_drop_nofix == stim_each_present)
+                # assert len(stim_bin_list) == len(stim_success_fail)
+                # if len(stim_code_user) > 0:
+                    # if stim_code_user[-1] not in [35,48]:
+                        # assert np.all(stim_bin_list[:-1] == stim_success_fail[:-1]) #no way to tell with other method if manual abort whether success or fail
+                        # stim_success_fail = stim_bin_list #defer to user data for more accuarte reading
+                    # else:
+                    #     assert np.all(stim_bin_list == stim_success_fail)
+        else:
+            assert False, 'why no trial data'
 
 
-        return stim_each_present, stim_code_times, stim_success_fail
+        return stim_list_user_drop_nofix, stim_code_times, stim_bin_list
     
     def AlignBehWithNeuralData(self, trial_ml2):
         """

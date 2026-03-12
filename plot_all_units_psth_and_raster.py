@@ -2,24 +2,24 @@ from scipy.io import loadmat
 import os
 import numpy as np
 import pandas as pd
-from quad import loadQuad, Quads #custom class for quad data
+from neuralplot import loadNeuralplot, Neuralplot #custom class for quad data
 import tdt
 import matplotlib.pyplot as plt
 
 animal_date_dict = {
-    'Pancho': ['251118','251119','251120'],
-    'Diego': ['251113','251114','251118']
+    # 'Pancho': ['260217','260218','260219'],
+    'Diego': ['260211']
 }
 
 for animal, dates in animal_date_dict.items():
     for date in dates:
         print(f'Doing {animal} {date}...')
-        basedir = f'/home/danhan/code/data/quad_data/plots/{animal}/{date}'
-        quad = loadQuad(animal, date)
+        basedir = f'/home/danhan/code/data/plots/fob_theo/{animal}/{date}'
+        nplot = loadNeuralplot(animal, date)
 
-        from quad import REGIONS
+        from neuralplot import REGIONS
         for r in REGIONS:
-            channels = quad.getChannelNumOrRegionName(r, return_as = 'list')
+            channels = nplot.getChannelNumOrRegionName(r, return_as = 'list')
 
             params = {
             'fixation_success_binary': [True],
@@ -29,17 +29,17 @@ for animal, dates in animal_date_dict.items():
 
             if not os.path.exists(savedir):
                 os.makedirs(savedir)
-            print('Plotting rasters for each unit...')
+            print(f'Plotting rasters for each unit in {r}...')
             for channel in channels:
-                fig_dict = quad.plotRaster(channel,params, window = (0.4,1.0))
+                fig_dict = nplot.plotRaster(channel,params, window = (0.4,1.0))
                 for index, fig in fig_dict.items():
                     fig.savefig(f'{savedir}/{r}_{channel}_{index}.png')
                     plt.close(fig)
                 plt.close('all')
             print('... Done')
-            print('Plotting PSTH for each site accross whole day...')
+            print(f'Plotting PSTH for each {r} site accross whole day...')
             for channel in channels:                                                    
-                fig_dict = quad.plotPSTH([channel], params, group_by='fixation_success_binary')
+                fig_dict = nplot.plotPSTH([channel], params, group_by='fixation_success_binary')
 
                 savedir = f'{basedir}/psth_whole_day/{r}'
                 if not os.path.exists(savedir):
