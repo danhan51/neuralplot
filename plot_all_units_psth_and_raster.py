@@ -7,14 +7,15 @@ import tdt
 import matplotlib.pyplot as plt
 
 animal_date_dict = {
-    # 'Pancho': ['260217','260218','260219'],
-    'Diego': ['260211']
+    # 'Pancho': ['260310']
+    # 'Pancho':['230615'],
+    'Diego': ['260304']
 }
 
 for animal, dates in animal_date_dict.items():
     for date in dates:
         print(f'Doing {animal} {date}...')
-        basedir = f'/home/danhan/code/data/plots/fob_theo/{animal}/{date}'
+        basedir = f'/home/danhan/code/prims_fixation_final/plots/{animal}/{date}'
         nplot = loadNeuralplot(animal, date)
 
         from neuralplot import REGIONS

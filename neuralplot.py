@@ -4,7 +4,7 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt
 
-MAX_NUM_STIMS = 48
+MAX_NUM_STIMS = 103
 
 EVENT_CODES_TO_EVENT_NAME = {
     9: 'trial_start',
@@ -15,6 +15,7 @@ EVENT_CODES_TO_EVENT_NAME = {
     49: 'timeout',
     50: 'rew', 
     51: 'trial_end_blue', #trial ends, and blue idle screen flashes
+    52: 'mid_trial_break',
     14: 'manual_reward'
 }
 
@@ -29,12 +30,13 @@ def loadNeuralplot(animal, date):
         subject = 'S2'
 
 
-    basedir = '/home/danhan/code/fob_theo'
+    basedir = '/home/danhan/code/prims_fixation_final'
     paths = {
-    'ml2_dir': f'{basedir}/{animal}/behavior/{date}',
-    'conditions_dir': f'{basedir}/{animal}/{date}_{animal}_conditions_groups.txt', 
-    'tdt_dir': f'{basedir}/{animal}/tdt/{date}',
-    'spikes_dir': f'{basedir}/{animal}/spikes_postprocess/{date}/DATSTRUCT_CLEAN_MERGED.mat'
+    'ml2_dir': f'{basedir}/{animal}/{date}/behavior_fixation',
+    'conditions_dir': f'{basedir}/primsfix_bothmonkey.txt', 
+    'tdt_dir_fixation': f'{basedir}/{animal}/{date}/tdt_fixation',
+    'tdt_dir_draw': f'{basedir}/{animal}/{date}/tdt_draw',
+    'spikes_dir': f'{basedir}/{animal}/{date}/spikes_postprocess/DATSTRUCT_CLEAN_MERGED.mat'
     }
 
     return Neuralplot(paths, animal, date)
@@ -131,8 +133,8 @@ class Neuralplot:
         self._session_rec_names = None
         self.ml2_dat_list = self.loadML2Data()              # dict with all trial info (convert bhv2 to mat)
         # self.conditions = self.loadCondtionsFile() # conditions file loaded from text as pd df
-        self.tdt_dat_list = self.loadTdtData()
-        self._session_durations = self.getSessionDurations()
+        self.tdt_dat_dict = self.loadTdtData()
+        self._session_start_times = self.getSessionStarts()
         self._animal = animal
         self._date = date
         
@@ -161,7 +163,8 @@ class Neuralplot:
         beh_dat_list = []
         #make sure list is ordered by session properly
         bhv_list_ordered = []
-        for i in range(1,len(bhv_list)+1):
+        session_nums = [int(file.split('.')[0][-1]) for file in bhv_list]
+        for i in session_nums:
             for bhv in bhv_list:
                 if bhv.split('.')[0].endswith(str(i)):
                     bhv_list_ordered.append(bhv)
@@ -174,8 +177,10 @@ class Neuralplot:
         Function to load tdt data, pretty function concats
         """
         from tdt import read_block
-        tdt_list = [entry.name for entry in os.scandir(self.paths['tdt_dir']) if entry.is_dir()]
-        tdt_dat_list = []
+        tdt_list_fixation = os.listdir(self.paths['tdt_dir_fixation'])
+        tdt_list_draw = os.listdir(self.paths['tdt_dir_draw'])
+        tdt_list_all = tdt_list_fixation + tdt_list_draw
+        tdt_dat_dict = {}
         evs_load = ['streams', 'epocs']
         stores_load = ['SMa1', 'Rew/','PhD2']
         if load_eye_tracking:
@@ -185,19 +190,20 @@ class Neuralplot:
         #probably overcomplicated but wnated ot make sure it does what I want
         #make sure tdt list sessions are ordered properly in time
         tdt_list_ordered = []
-        sess_times = sorted(set([int(s.split('-')[-1]) for s in tdt_list]))
+        sess_times = sorted(set([int(s.split('-')[-1]) for s in tdt_list_all]))
         for sess_time in sess_times:
-            for sess in tdt_list:
+            for sess in tdt_list_all:
                 if sess_time == int(sess[-6:]):
                     tdt_list_ordered.append(sess)
         self._session_rec_names = tdt_list_ordered
-        for tdt_session in tdt_list_ordered:
-            fullpath = f"{self.paths['tdt_dir']}/{tdt_session}"
-            session_data = read_block(fullpath,
-                                    evtype=evs_load,
-                                    store=stores_load)
-            tdt_dat_list.append(session_data)
-        return tdt_dat_list
+        for i,tdt_session in enumerate(tdt_list_ordered):
+            if tdt_session in tdt_list_fixation:
+                fullpath = f"{self.paths['tdt_dir_fixation']}/{tdt_session}"
+                session_data = read_block(fullpath,
+                                        evtype=evs_load,
+                                        store=stores_load)
+                tdt_dat_dict[i] = session_data
+        return tdt_dat_dict
 
     def loadCondtionsFile(self):
         """
@@ -232,8 +238,11 @@ class Neuralplot:
         Generally dont use, lots of data an dnot very useful except debugging
         Function to load tdt neural data
         """
+        assert False
         from tdt import read_block
-        tdt_list = os.listdir(self.paths['tdt_dir'])
+        tdt_list_fixation = os.listdir(self.paths['tdt_dir_fixation'])
+        tdt_list_draw = os.listdir(self.paths['tdt_dir_draw'])
+        tdt_list_all = tdt_list_fixation.extend(tdt_list_draw)
         tdt_dat_list = []
         evs_load = ['streams']
         stores_load = ['RSn2','RSn3']
@@ -241,20 +250,21 @@ class Neuralplot:
         #probably overcomplicated but wnated ot make sure it does what I want
         #make sure tdt list sessions are ordered properly in time
         tdt_list_ordered = []
-        sess_times = sorted(set([int(s.split('-')[-1]) for s in tdt_list]))
+        sess_times = sorted(set([int(s.split('-')[-1]) for s in tdt_list_all]))
         for sess_time in sess_times:
             for sess in tdt_list:
                 if sess_time == int(sess[-6:]):
                     tdt_list_ordered.append(sess)
         self._session_rec_names = tdt_list_ordered
         for tdt_session in tdt_list_ordered:
-            fullpath = f"{self.paths['tdt_dir']}/{tdt_session}"
-            session_data = read_block(fullpath,
-                                    evtype=evs_load,
-                                    store=stores_load,
-                                    t1=trange[0],t2=trange[1],
-                                    nodata=nodata)
-            tdt_dat_list.append(session_data)
+            if tdt_session in tdt_list_fixation:
+                fullpath = f"{self.paths['tdt_dir']}/{tdt_session}"
+                session_data = read_block(fullpath,
+                                        evtype=evs_load,
+                                        store=stores_load,
+                                        t1=trange[0],t2=trange[1],
+                                        nodata=nodata)
+                tdt_dat_list.append(session_data)
         return tdt_dat_list
     
     def loadTdtNeuralDup(self, trange):
@@ -262,6 +272,7 @@ class Neuralplot:
         Function to load tdt local dup to check timing
         No loading or raw neural data (probs dont need)
         """
+        assert False
         from tdt import read_block
         tdt_list = os.listdir(self.paths['tdt_dir'])
         tdt_dat_list = []
@@ -324,8 +335,8 @@ class Neuralplot:
         full_df = pd.DataFrame(columns = df_columns)
         
         stim_counter = 0
-        sess_offset = 0
-        for session_ind, session_dat in enumerate(self.tdt_dat_list):
+        for session_ind, session_dat in self.tdt_dat_dict.items():
+            session_offset = self._session_start_times[session_ind]
             session_df = pd.DataFrame(columns = df_columns)
             beh_codes = session_dat.epocs.SMa1.data
             ons = session_dat.epocs.SMa1.onset
@@ -351,15 +362,14 @@ class Neuralplot:
                         'trial_ml2': trial_counter,
                         'stim_index': stim_index,
                         'code_type': code_type,
-                        'on': on + sess_offset,
-                        'off': off
+                        'on': on + session_offset,
+                        'off': off + session_offset
                     }
                 ])
                 session_df = pd.concat([session_df,new_entry], ignore_index=True)
 
             session_df = self.assignEventMarkerstoPDTimes(session_ind, session_df)
             full_df = pd.concat([full_df,session_df], ignore_index=True)
-            sess_offset += self._session_durations[session_ind]
         return full_df
     
     def mergeBehTdt(self):
@@ -496,7 +506,7 @@ class Neuralplot:
                         fig_dict[unit_index] = fig
         return fig_dict
 
-    def plotRaster(self, channel, params, align_to = 'sample_on', window = (0.2,0.8), figsize=(6,6)):
+    def plotRaster(self, channel, params, align_to = 'sample_on', window = (0.2,0.8), figsize=(8,8)):
         """
         Simple raster plot function
         Args:
@@ -527,10 +537,15 @@ class Neuralplot:
         for unit_index, spike_times in dict_spike_times.items():
             raster_vind = 0
             fig, ax = plt.subplots(1,figsize=figsize)
+            assert len(spike_times) == len(times_list)
             for t0_this, stim_spikes in zip(times_list,spike_times):
+                if len(stim_spikes) > 0:
+                    assert np.abs(stim_spikes[0] - t0_this) < window[0] + 1
+                    # assert len(stim_spikes)>0
                 self._plot_raster_line(ax, stim_spikes, raster_vind, alignto_time=t0_this)
                 raster_vind += 1
             ax.axvline(0, color = 'red',alpha = 0.4)
+            # asdasd
             ax.set_title(f'Channel: {channel}; Unit index: {unit_index}')
             fig_dict[unit_index] = fig
         return fig_dict
@@ -547,8 +562,16 @@ class Neuralplot:
             t = times
         #     ax.plot(times, yval*np.ones(time.shape), '.', color=color, alpha=0.55)
 
+        # assert len(t)>0
+        # if yval>500 and yval<700:
+        #     color = 'red'
+
+        # if yval==1000:
+        #     ax.axhline(yval, color="r")
+        #     adsfasdfdsa
+
         ax.eventplot([t], lineoffsets=yval, color=color, alpha=alpha, linelengths=linelengths,
-                     linewidths=linewidths)
+                     linewidths=linewidths)#, antialiased=False)
         
     
         
@@ -758,17 +781,14 @@ class Neuralplot:
                 return np.nan, np.nan
 
             return idx, val
-        
-        session_time_offset = 0
-        if session > 0:
-            for i in range(session):
-                session_time_offset += self._session_durations[i]        
-        pd_times = self.getPhotodiodeThresholdCrossings(session) + session_time_offset
+               
+        session_offset = self._session_start_times[session]
+        pd_times = self.getPhotodiodeThresholdCrossings(session) + session_offset
 
         max_dist = 0.15 #thresh for how far pd time can be from 'onset' time
         neural['photodiode_time'] = np.nan
 
-        rew_times = self.tdt_dat_list[session].epocs.Rew_.onset + session_time_offset
+        rew_times = self.tdt_dat_dict[session].epocs.Rew_.onset + session_offset
         
 
         rew_inds_taken = []
@@ -788,7 +808,7 @@ class Neuralplot:
                 idx, pd_time = nearest_value(pd_times, row['on'], max_dist = max_dist)
                 if np.isnan(pd_time):
                     assert row['code_type'] == 'fix_cue' and neural.loc[i-1,'code_type'] == 'trial_start'\
-                    or row['code_type'] == 'manual_reward'
+                    or row['code_type'] == 'manual_reward', f"{row['code_type']} why na"
                     #sometimes first fix at trial start cue no pd time
                     #since very infrequent I assume happens when esc and then restart
                     #also manual reward not tracked so ignore
@@ -815,9 +835,9 @@ class Neuralplot:
         """
         from scipy.signal import butter,filtfilt,freqz
 
-        pd_analog = self.tdt_dat_list[session].streams.PhD2.data
+        pd_analog = self.tdt_dat_dict[session].streams.PhD2.data
 
-        fs = self.tdt_dat_list[session].streams.PhD2.fs
+        fs = self.tdt_dat_dict[session].streams.PhD2.fs
         cutoff_freq = 60
         nyquist_freq = 0.5*fs
         normal_cutoff = cutoff_freq/nyquist_freq
@@ -904,9 +924,9 @@ class Neuralplot:
                 stim_list_user_drop_nofix = [stim for i,stim in enumerate(stim_list_user) if stim_code_user[i] not in [5]]
                 stim_bin_list = []
                 for code in stim_code_user:
-                    if code == 0:
+                    if code in [0,6]: #6 means failed fix b4 rew, but held for stim
                         stim_bin_list.append(True)
-                    elif code in [3,4]:
+                    elif code in [3]:
                         #either broke fix during stim or in hold pd after
                         stim_bin_list.append(False)
 
@@ -951,7 +971,7 @@ class Neuralplot:
 
         return (start_time,end_time)
     
-    def getSessionDurations(self):
+    def getSessionStarts(self):
         """
         function to load session durations for accurate time keeping
         session duration in tdt.info is not accurate to the actual recording length
@@ -970,7 +990,12 @@ class Neuralplot:
             for sessnum, sessrec in enumerate(self._session_rec_names):
                 # - Collect duration for this session
                 logfile = f"RSn{rs}_log"
-                path = f"{self.paths['tdt_dir']}/{sessrec}/{logfile}.txt"
+                if os.path.exists(f"{self.paths['tdt_dir_fixation']}/{sessrec}/{logfile}.txt"):
+                    path = f"{self.paths['tdt_dir_fixation']}/{sessrec}/{logfile}.txt"
+                elif os.path.exists(f"{self.paths['tdt_dir_draw']}/{sessrec}/{logfile}.txt"):
+                    path = f"{self.paths['tdt_dir_draw']}/{sessrec}/{logfile}.txt"
+                else:
+                    assert False, f'no log file found for {sessrec} in either dir'
                 with open(path) as f:
                     lines = f.readlines()
 
@@ -1005,6 +1030,7 @@ class Neuralplot:
                 # else:
                 #     assert dur - nsamp/FS < 0.005
 
+
                 durations.append(nsamp/fs)
             durs_rs[rs] = durations
         assert len(durs_rs[2]) == len(durs_rs[3])
@@ -1012,8 +1038,10 @@ class Neuralplot:
         for rs2_dur, rs3_dur in zip(durs_rs[2],durs_rs[3]):
             assert np.isclose(rs2_dur,rs3_dur,atol=0.0015)
             avg_durs.append(np.mean([rs2_dur,rs3_dur]))
-        return avg_durs
-    
+        session_start_times = {}
+        for fix_session in self.tdt_dat_dict.keys():
+            session_start_times[fix_session] = sum(avg_durs[:fix_session])
+        return session_start_times   
     def checkISI(self, min_events=12):
         """
         For each trial in trial_ml2, compute the correlation between
