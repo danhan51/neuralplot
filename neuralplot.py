@@ -921,7 +921,7 @@ class Neuralplot:
                 stim_list_user = [s.rsplit('\\')[-1].split('.')[0] for s in stim_full_user]
                 sample_error_codes_user = np.atleast_1d(self.ml2_dat_list[session]['TrialRecord']['User']['TrialData'][trial_ml2-1]['sample_error_code'])
                 stim_code_user = [c for c in sample_error_codes_user]
-                stim_list_user_drop_nofix = [stim for i,stim in enumerate(stim_list_user) if stim_code_user[i] not in [5]]
+                stim_list_user_drop_nofix = [stim for i,stim in enumerate(stim_list_user) if stim_code_user[i] not in [4,5]]
                 stim_bin_list = []
                 for code in stim_code_user:
                     if code in [0,6]: #6 means failed fix b4 rew, but held for stim
@@ -929,6 +929,14 @@ class Neuralplot:
                     elif code in [3]:
                         #either broke fix during stim or in hold pd after
                         stim_bin_list.append(False)
+                    elif code in [1,4,5]:
+                        continue
+                    else:
+                        assert False
+                assert len(stim_bin_list) == len(stim_list_user_drop_nofix)
+                vals,counts = np.unique(stim_list_user_drop_nofix,return_counts=True)
+                assert np.min(counts > 10), f'too few stims, min: {np.min(counts)}, max: {np.max(counts)}'
+        
 
                 # print(stim_list_user_drop_nofix)
                 # print(stim_each_present)
