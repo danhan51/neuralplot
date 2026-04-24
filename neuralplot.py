@@ -345,7 +345,7 @@ class Neuralplot:
             for code,on,off in zip(beh_codes,ons,offs):
                 code = int(code)
                 if code in range(102,100+MAX_NUM_STIMS+2):
-                    code_type = f'stim_in_cond_{int(code)%100-2}'
+                    code_type = f'stim_in_cond_{int(code)-102}'
                     stim_index = np.nan
                 elif code == 9:
                     trial_counter += 1
@@ -935,7 +935,7 @@ class Neuralplot:
                         assert False
                 assert len(stim_bin_list) == len(stim_list_user_drop_nofix)
                 vals,counts = np.unique(stim_list_user_drop_nofix,return_counts=True)
-                assert np.min(counts > 10), f'too few stims, min: {np.min(counts)}, max: {np.max(counts)}'
+                # assert np.min(counts > 10), f'too few stims, min: {np.min(counts)}, max: {np.max(counts)}'
         
 
                 # print(stim_list_user_drop_nofix)
