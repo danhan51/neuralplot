@@ -378,7 +378,8 @@ class Neuralplot:
         """
         beh = self.prettyBeh
         tdt = self.prettyTdt
-        tdt_stim_inds = tdt['stim_index'].dropna().to_numpy()
+        tdt_stims_only = tdt[tdt['code_type'] == 'sample_on']
+        tdt_stim_inds = tdt_stims_only['stim_index'].to_numpy()
         beh_stim_inds = beh['stim_index'].to_numpy()
         assert np.all(tdt_stim_inds == beh_stim_inds)
         merge = pd.merge(beh,tdt, on='stim_index')
@@ -933,10 +934,7 @@ class Neuralplot:
                         continue
                     else:
                         assert False
-                assert len(stim_bin_list) == len(stim_list_user_drop_nofix)
-                vals,counts = np.unique(stim_list_user_drop_nofix,return_counts=True)
-                # assert np.min(counts > 10), f'too few stims, min: {np.min(counts)}, max: {np.max(counts)}'
-        
+                assert len(stim_bin_list) == len(stim_list_user_drop_nofix)        
 
                 # print(stim_list_user_drop_nofix)
                 # print(stim_each_present)
