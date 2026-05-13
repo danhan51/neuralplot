@@ -378,8 +378,7 @@ class Neuralplot:
         """
         beh = self.prettyBeh
         tdt = self.prettyTdt
-        tdt_stims_only = tdt[tdt['code_type'] == 'sample_on']
-        tdt_stim_inds = tdt_stims_only['stim_index'].to_numpy()
+        tdt_stim_inds = tdt['stim_index'].dropna().to_numpy()
         beh_stim_inds = beh['stim_index'].to_numpy()
         assert np.all(tdt_stim_inds == beh_stim_inds)
         merge = pd.merge(beh,tdt, on='stim_index')
@@ -922,7 +921,7 @@ class Neuralplot:
                 stim_list_user = [s.rsplit('\\')[-1].split('.')[0] for s in stim_full_user]
                 sample_error_codes_user = np.atleast_1d(self.ml2_dat_list[session]['TrialRecord']['User']['TrialData'][trial_ml2-1]['sample_error_code'])
                 stim_code_user = [c for c in sample_error_codes_user]
-                stim_list_user_drop_nofix = [stim for i,stim in enumerate(stim_list_user) if stim_code_user[i] not in [4,5]]
+                stim_list_user_drop_nofix = [stim for i,stim in enumerate(stim_list_user) if stim_code_user[i] not in [5]]
                 stim_bin_list = []
                 for code in stim_code_user:
                     if code in [0,6]: #6 means failed fix b4 rew, but held for stim
@@ -930,11 +929,7 @@ class Neuralplot:
                     elif code in [3]:
                         #either broke fix during stim or in hold pd after
                         stim_bin_list.append(False)
-                    elif code in [1,4,5]:
-                        continue
-                    else:
-                        assert False
-                assert len(stim_bin_list) == len(stim_list_user_drop_nofix) == len(stim_code_times)        
+                assert len(stim_bin_list) == len(stim_list_user_drop_nofix) ==len(stim_code_times)
 
                 # print(stim_list_user_drop_nofix)
                 # print(stim_each_present)
